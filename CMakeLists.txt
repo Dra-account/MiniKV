@@ -11,4 +11,5 @@ add_executable(minikv
     src/engine.c
     src/storage.c
     src/string_utils.c
+    src/http_server.c
 )
