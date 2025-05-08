@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include "../include/storage.h"
+#include "storage.h"
 
 #define MAX_ITEMS 1024
 #define KEY_SIZE 128

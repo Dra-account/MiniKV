@@ -1,9 +1,9 @@
 #include <string.h>
 #include <stdio.h>
-#include "../include/parser.h"
-#include "../include/string_utils.h"
+#include "parser.h"
+#include "string_utils.h"
 
-int parser_input(const char* input, KvCommand* cmd) {
+int parse_input(const char* input, KvCommand* cmd) {
     char op[16] = {0};
     int matched = sscanf(input, "%15s %127s %255[^\n]", op, cmd->key, cmd->value);
     if (matched == 2 && strcmp_ignore_case(op, "GET") == 0 ) {

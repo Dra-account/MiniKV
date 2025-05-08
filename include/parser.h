@@ -13,6 +13,6 @@ typedef struct {
     char value[256]; // only for use in set
 } KvCommand;
 
-int parser_input(const char* input, KvCommand* cmd);
+int parse_input(const char* input, KvCommand* cmd);
 
 #endif
