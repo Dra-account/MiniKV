@@ -11,6 +11,29 @@
 
 #define BUFFER_SIZE 1024
 
+
+void send_response(int client_sock, const char *msg, size_t msg_len, int status_code) {
+    char *response = (char *)malloc(BUFFER_SIZE);
+    if (!response) {
+        perror("malloc");
+        return;
+    }
+    const char *status_line;
+    if (status_code == 200) {
+        status_line = "HTTP/1.0 200 OK";
+    } else {
+        status_line = "HTTP/1.0 400 Bad Request";
+    }
+    snprintf(response, BUFFER_SIZE,
+        "%s\r\n"
+        "Content-Type: application/json\r\n"
+        "Content-Length: %zu\r\n"
+        "\r\n"
+        "%s", status_line, msg_len, msg);
+    write(client_sock, response, strlen(response));
+    free(response);
+}
+
 // 处理客户端请求
 void handle_client(int client_sock, Storage* store) {
     char buffer[BUFFER_SIZE];
@@ -28,15 +51,7 @@ void handle_client(int client_sock, Storage* store) {
     // 找到请求体（跳过请求头）
     char* body = strstr(buffer, "\r\n\r\n");
     if (!body || strlen(body) < 4) {
-        const char* msg = "{\"error\": \"Malformed request\"}";
-        char response[BUFFER_SIZE];
-        snprintf(response, sizeof(response),
-            "HTTP/1.0 400 Bad Request\r\n"
-            "Content-Type: application/json\r\n"
-            "Content-Length: %zu\r\n"
-            "\r\n"
-            "%s", strlen(msg), msg);
-        write(client_sock, response, strlen(response));
+        send_response(client_sock, "{\"error\": \"Malformed request\"}", strlen("{\"error\": \"Malformed request\"}"), 400);
         close(client_sock);
         return;
     }
@@ -46,15 +61,7 @@ void handle_client(int client_sock, Storage* store) {
     // 解析 SQL 命令
     KvCommand cmd;
     if (parse_input(body, &cmd) != 0) {
-        const char* msg = "{\"error\": \"Invalid command\"}";
-        char response[BUFFER_SIZE];
-        snprintf(response, sizeof(response),
-            "HTTP/1.0 400 Bad Request\r\n"
-            "Content-Type: application/json\r\n"
-            "Content-Length: %zu\r\n"
-            "\r\n"
-            "%s", strlen(msg), msg);
-        write(client_sock, response, strlen(response));
+        send_response(client_sock, "{\"error\": \"Invalid command\"}", strlen("{\"error\": \"Invalid command\"}"), 400);
         close(client_sock);
         return;
     }
@@ -63,14 +70,7 @@ void handle_client(int client_sock, Storage* store) {
     ExecutionResult result = engine_execute(store, &cmd);
 
     // 构建 JSON 响应
-    char response[BUFFER_SIZE];
-    snprintf(response, sizeof(response),
-        "HTTP/1.0 200 OK\r\n"
-        "Content-Type: application/json\r\n"
-        "Content-Length: %zu\r\n"
-        "\r\n"
-        "%s", strlen(result.message), result.message);
-    write(client_sock, response, strlen(response));
+    send_response(client_sock, result.message, strlen(result.message), 200);
 
     // 关闭连接
     close(client_sock);
