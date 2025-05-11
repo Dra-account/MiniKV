@@ -9,29 +9,43 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 2048
 
 
 void send_response(int client_sock, const char *msg, size_t msg_len, int status_code) {
-    char *response = (char *)malloc(BUFFER_SIZE);
-    if (!response) {
-        perror("malloc");
-        return;
+    
+    // 是否为完整响应（含 HTTP 头），用于区分 HTML vs JSON
+    int is_full_http_response = 0;
+
+    // 如果返回内容以 "HTTP/" 开头，视为完整响应（如 handle_index 返回）
+    if (strncmp(msg, "HTTP/", 5) == 0) {
+        is_full_http_response = 1;
     }
-    const char *status_line;
-    if (status_code == 200) {
-        status_line = "HTTP/1.0 200 OK";
+
+    if (is_full_http_response) {
+        // 已包含完整 HTTP 头
+        write(client_sock, msg, strlen(msg));
     } else {
-        status_line = "HTTP/1.0 400 Bad Request";
+        char *response = (char *)malloc(BUFFER_SIZE * 2);
+        if (!response) {
+            perror("malloc");
+            return;
+        }
+        const char *status_line;
+        if (status_code == 200) {
+            status_line = "HTTP/1.0 200 OK";
+        } else {
+            status_line = "HTTP/1.0 400 Bad Request";
+        }
+        snprintf(response, BUFFER_SIZE * 2,
+            "%s\r\n"
+            "Content-Type: application/json\r\n"
+            "Content-Length: %zu\r\n"
+            "\r\n"
+            "%s", status_line, msg_len, msg);
+        write(client_sock, response, strlen(response));
+        free(response);
     }
-    snprintf(response, BUFFER_SIZE,
-        "%s\r\n"
-        "Content-Type: application/json\r\n"
-        "Content-Length: %zu\r\n"
-        "\r\n"
-        "%s", status_line, msg_len, msg);
-    write(client_sock, response, strlen(response));
-    free(response);
 }
 
 // 处理客户端请求
@@ -49,8 +63,8 @@ void handle_client(int client_sock, Storage* store) {
     buffer[bytes_read] = '\0'; // 确保字符串结尾
 
     // 提取 HTTP 方法和路径
-    char method[8], path[64];
-    if (sscanf(buffer, "%7s %63ss", method, path) != 2) {
+    char method[8], path[128];
+    if (sscanf(buffer, "%7s %127s", method, path) != 2) {
          send_response(client_sock, "{\"error\": \"Malformed request line\"}", strlen("{\"error\": \"Malformed request line\"}"), 400);
         close(client_sock);
         return;
@@ -58,15 +72,16 @@ void handle_client(int client_sock, Storage* store) {
 
     // 找到请求体（跳过请求头）
     char* body = strstr(buffer, "\r\n\r\n");
-    if (!body || strlen(body) < 4) {
-        send_response(client_sock, "{\"error\": \"Malformed request body\"}", strlen("{\"error\": \"Malformed request body\"}"), 400);
-        close(client_sock);
-        return;
+    if (body) {
+        body += 4;
+    } else {
+        body = "";
     }
-    body += 4;  // 跳过 "\r\n\r\n"，body 现在指向请求体部分
-
+    
     // 使用 API 处理模块生成响应体
-    char msg[BUFFER_SIZE];
+    char msg[BUFFER_SIZE * 2];
+    memset(msg, 0, sizeof(msg));
+
     handle_api_request(store, path, body, msg, sizeof(msg));
     
     send_response(client_sock, msg, strlen(msg), 200);
@@ -84,9 +99,11 @@ void http_server_start(Storage* store, int port) {
     server_sock = socket(AF_INET, SOCK_STREAM, 0);
     if (server_sock < 0) {
         perror("socket");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
+    int reuse = 1;
+    setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
@@ -95,13 +112,13 @@ void http_server_start(Storage* store, int port) {
     if (bind(server_sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
         perror("bind");
         close(server_sock);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     if (listen(server_sock, 5) < 0) {
         perror("listen");
         close(server_sock);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     printf("HTTP server started on port %d...\n", port);
