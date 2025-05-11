@@ -12,4 +12,5 @@ add_executable(minikv
     src/storage.c
     src/string_utils.c
     src/http_server.c
+    src/api_handler.c
 )

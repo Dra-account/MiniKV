@@ -1,6 +1,6 @@
+#include "api_handler.h"
 #include "http_server.h"
-#include "engine.h"
-#include "parser.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -48,29 +48,28 @@ void handle_client(int client_sock, Storage* store) {
     }
     buffer[bytes_read] = '\0'; // 确保字符串结尾
 
+    // 提取 HTTP 方法和路径
+    char method[8], path[64];
+    if (sscanf(buffer, "%7s %63ss", method, path) != 2) {
+         send_response(client_sock, "{\"error\": \"Malformed request line\"}", strlen("{\"error\": \"Malformed request line\"}"), 400);
+        close(client_sock);
+        return;
+    }
+
     // 找到请求体（跳过请求头）
     char* body = strstr(buffer, "\r\n\r\n");
     if (!body || strlen(body) < 4) {
-        send_response(client_sock, "{\"error\": \"Malformed request\"}", strlen("{\"error\": \"Malformed request\"}"), 400);
+        send_response(client_sock, "{\"error\": \"Malformed request body\"}", strlen("{\"error\": \"Malformed request body\"}"), 400);
         close(client_sock);
         return;
     }
-
     body += 4;  // 跳过 "\r\n\r\n"，body 现在指向请求体部分
 
-    // 解析 SQL 命令
-    KvCommand cmd;
-    if (parse_input(body, &cmd) != 0) {
-        send_response(client_sock, "{\"error\": \"Invalid command\"}", strlen("{\"error\": \"Invalid command\"}"), 400);
-        close(client_sock);
-        return;
-    }
-
-    // 执行命令
-    ExecutionResult result = engine_execute(store, &cmd);
-
-    // 构建 JSON 响应
-    send_response(client_sock, result.message, strlen(result.message), 200);
+    // 使用 API 处理模块生成响应体
+    char msg[BUFFER_SIZE];
+    handle_api_request(store, path, body, msg, sizeof(msg));
+    
+    send_response(client_sock, msg, strlen(msg), 200);
 
     // 关闭连接
     close(client_sock);
@@ -119,3 +118,4 @@ void http_server_start(Storage* store, int port) {
 
     close(server_sock);
 }
+
