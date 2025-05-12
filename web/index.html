@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MiniKV 控制台</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="console">
+        <h1>MiniKV Console</h1>
+        <textarea id="sqlInput" placeholder="请输入命令，如 SET a 123 或 GET a"></textarea>
+        <button onclick="sendQuery()">执行</button>
+        <pre id="resultArea">等待响应...</pre>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
