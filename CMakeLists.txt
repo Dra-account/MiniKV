@@ -14,3 +14,13 @@ add_executable(minikv
     src/http_server.c
     src/api_handler.c
 )
+
+add_executable(test_storage
+    test/test_storage.c
+    src/storage.c
+)
+
+target_link_libraries(test_storage check subunit m pthread)
+
+enable_testing()
+add_test(NAME StorageTest COMMAND test_storage)
